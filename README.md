@@ -61,3 +61,4 @@ env.setStreamTimeCharacteristic(TimeCharacteristic.EventTime);
 >
 > 解决： Flink WaterMark机制
 
+## 窗口（Window）
