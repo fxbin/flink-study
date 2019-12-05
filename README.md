@@ -1,7 +1,7 @@
 参考链接：
 
-[getting-started_1.9](https://ci.apache.org/projects/flink/flink-docs-release-1.9/getting-started/tutorials/local_setup.html)
-[flink-learning](https://github.com/zhisheng17/flink-learning)
+* [getting-started_1.9](https://ci.apache.org/projects/flink/flink-docs-release-1.9/getting-started/tutorials/local_setup.html)
+* [flink-learning](https://github.com/zhisheng17/flink-learning)
 
 ## 时间语义
 
