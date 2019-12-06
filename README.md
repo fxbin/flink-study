@@ -1,3 +1,7 @@
+flink 学习记录
+
+> tips: 大部分内容源自zhisheng的博客, 在此仅用于学习记录
+
 参考链接：
 
 * [getting-started_1.9](https://ci.apache.org/projects/flink/flink-docs-release-1.9/getting-started/tutorials/local_setup.html)
@@ -40,7 +44,7 @@ Processing Time 是指事件被处理时机器的系统时间。
 ### 如何设置 Time 策略？
 在创建完流运行环境的时候，然后就可以通过 env.setStreamTimeCharacteristic 设置时间策略：
 
-```Java
+```java
 final StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
 env.setStreamTimeCharacteristic(TimeCharacteristic.EventTime);
 
@@ -62,3 +66,202 @@ env.setStreamTimeCharacteristic(TimeCharacteristic.EventTime);
 > 解决： Flink WaterMark机制
 
 ## 窗口（Window）
+
+> 举个栗子：
+>
+> 通传感器的示例：统计经过某红绿灯的汽车数量之和？
+> 假设在一个红绿灯处，我们每隔 15 秒统计一次通过此红绿灯的汽车数量
+
+> 可以把汽车的经过看成一个流，无穷的流，不断有汽车经过此红绿灯，因此无法统计总共的汽车数量。但是，我们可以换一种思路，每隔 15 秒，我们都将与上一次的结果进行 sum 操作（滑动聚合）
+
+> 定义一个 Window（窗口），Window 的界限是 1 分钟，且每分钟内的数据互不干扰，因此也可以称为翻滚（不重合）窗口
+> 这样就可以统计出每分钟的数量。。。60个window
+
+> 再考虑一种情况，每 30 秒统计一次过去 1 分钟的汽车数量之和
+> 数据重合，120个window
+
+### Window 有什么作用？
+
+> 通常来讲，Window 就是用来对一个无限的流设置一个有限的集合，在有界的数据集上进行操作的一种机制。Window 又可以分为基于时间（Time-based）的 Window 以及基于数量（Count-based）的 window。
+
+### Flink 自带的 Window
+
+Flink 在 KeyedStream（DataStream 的继承类） 中提供了下面几种 Window：
+
+* 以时间驱动的 Time Window
+* 以事件数量驱动的 Count Window
+* 以会话间隔驱动的 Session Window
+
+`由于某些特殊的需要，DataStream API 也提供了定制化的 Window 操作，供用户自定义 Window。`
+
+#### Time Window 使用及源码分析
+
+> Time Window 根据时间来聚合流数据。例如：一分钟的时间窗口就只会收集一分钟的元素，并在一分钟过后对窗口中的所有元素应用于下一个算子。
+
+示例Code:
+
+> 输入一个时间参数，这个时间参数可以利用 Time 这个类来控制，如果事前没指定 TimeCharacteristic 类型的话，则默认使用的是 ProcessingTime
+
+```java
+dataStream.keyBy(1)
+    .timeWindow(Time.minutes(1)) //time Window 每分钟统计一次数量和
+    .sum(1);
+```
+
+时间窗口的数据窗口聚合流程如下图所示
+
+![img 时间窗口的数据窗口聚合流程图](image/时间窗口的数据窗口聚合流程.jpg)
+
+在第一个窗口中（1 ～ 2 分钟）和为7、第二个窗口中（2 ～ 3 分钟）和为 12、第三个窗口中（3 ～ 4 分钟）和为 7、第四个窗口中（4 ～ 5 分钟）和为 19。
+
+该 timeWindow 方法在 KeyedStream 中对应的源码如下：
+
+```java
+//时间窗口
+public WindowedStream<T, KEY, TimeWindow> timeWindow(Time size) {
+    if (environment.getStreamTimeCharacteristic() == TimeCharacteristic.ProcessingTime) {
+        return window(TumblingProcessingTimeWindows.of(size));
+    } else {
+        return window(TumblingEventTimeWindows.of(size));
+    }
+}
+```
+
+另外在 Time Window 中还支持滑动的时间窗口，比如定义了一个每 30s 滑动一次的 1 分钟时间窗口，它会每隔 30s 去统计过去一分钟窗口内的数据，同样使用也很简单，输入两个时间参数，如下：
+
+```java
+dataStream.keyBy(1)
+    .timeWindow(Time.minutes(1), Time.seconds(30)) //sliding time Window 每隔 30s 统计过去一分钟的数量和
+    .sum(1);
+```
+
+滑动时间窗口的数据聚合流程如下图所示：
+
+![img 滑动时间窗口的数据聚合流程](image/滑动时间窗口的数据聚合流程图.jpg)
+
+在该第一个时间窗口中（1 ～ 2 分钟）和为 7，第二个时间窗口中（1:30 ~ 2:30）和为 10，第三个时间窗口中（2 ~ 3 分钟）和为 12，第四个时间窗口中（2:30 ~ 3:30）和为 10，第五个时间窗口中（3 ~ 4 分钟）和为 7，第六个时间窗口中（3:30 ~ 4:30）和为 11，第七个时间窗口中（4 ~ 5 分钟）和为 19。
+
+```java
+//滑动时间窗口
+public WindowedStream<T, KEY, TimeWindow> timeWindow(Time size, Time slide) {
+    if (environment.getStreamTimeCharacteristic() == TimeCharacteristic.ProcessingTime) {
+        return window(SlidingProcessingTimeWindows.of(size, slide));
+    } else {
+        return window(SlidingEventTimeWindows.of(size, slide));
+    }
+}
+```
+
+#### Count Window 使用及源码分析
+
+> Apache Flink 还提供计数窗口功能，如果计数窗口的值设置的为 3 ，那么将会在窗口中收集 3 个事件，并在添加第 3 个元素时才会计算窗口中所有事件的值。
+
+示例Code: 
+
+```java
+dataStream.keyBy(1)
+    .countWindow(3) //统计每 3 个元素的数量之和
+    .sum(1);
+```
+
+计数窗口的数据窗口聚合流程如下图所示：
+
+![img 计数窗口的数据窗口聚合流程](image/计数窗口的数据窗口聚合流程图.jpg)
+
+该 countWindow 方法在 KeyedStream 中对应的源码如下：
+
+```java
+//计数窗口
+public WindowedStream<T, KEY, GlobalWindow> countWindow(long size) {
+    return window(GlobalWindows.create()).trigger(PurgingTrigger.of(CountTrigger.of(size)));
+}
+```
+
+另外在 Count Window 中还支持滑动的计数窗口，比如定义了一个每 3 个事件滑动一次的 4 个事件的计数窗口，它会每隔 3 个事件去统计过去 4 个事件计数窗口内的数据，使用也很简单，输入两个 long 类型的参数，如下：
+
+```java
+dataStream.keyBy(1) 
+    .countWindow(4, 3) //每隔 3 个元素统计过去 4 个元素的数量之和
+    .sum(1);
+```
+   
+滑动计数窗口的数据窗口聚合流程如下图所示：
+
+![img 滑动计数窗口的数据窗口聚合流程](image/滑动计数窗口的数据窗口聚合流程.jpg)
+
+该 countWindow 方法在 KeyedStream 中对应的源码如下：
+
+```java
+//滑动计数窗口
+public WindowedStream<T, KEY, GlobalWindow> countWindow(long size, long slide) {
+    return window(GlobalWindows.create()).evictor(CountEvictor.of(size)).trigger(CountTrigger.of(slide));
+}
+```
+
+#### Session Window 使用及源码分析
+
+> Apache Flink 还提供了会话窗口，是什么意思呢？使用该窗口的时候你可以传入一个时间参数（表示某种数据维持的会话持续时长），如果超过这个时间，就代表着超出会话时长。
+
+
+
+```java
+dataStream.keyBy(1)
+    .window(ProcessingTimeSessionWindows.withGap(Time.seconds(5)))//表示如果 5s 内没出现数据则认为超出会话时长，然后计算这个窗口的和
+    .sum(1);
+```
+
+会话窗口的数据窗口聚合流程如下图所示:
+
+![img 会话窗口的数据窗口聚合流程](image/会话窗口的数据窗口聚合流程.jpg)
+
+该 Window 方法在 KeyedStream 中对应的源码如下：
+
+```java
+//提供自定义 Window
+public <W extends Window> WindowedStream<T, KEY, W> window(WindowAssigner<? super T, W> assigner) {
+    return new WindowedStream<>(this, assigner);
+}
+```
+
+### 如何自定义 Window？
+
+![img 实现 Window 的机制](image/实现Window的机制.png)
+
+#### Window 源码定义
+
+```java
+public abstract class Window {
+    //获取属于此窗口的最大时间戳
+    public abstract long maxTimestamp();
+}
+```
+
+> Window 类图
+
+![img Window类图](image/Window类图.png)
+
+> TimeWindow 源码定义如下:
+
+```java
+public class TimeWindow extends Window {
+    //窗口开始时间
+    private final long start;
+    //窗口结束时间
+    private final long end;
+}
+```
+
+> GlobalWindow 源码定义如下：
+
+```java
+public class GlobalWindow extends Window {
+
+    private static final GlobalWindow INSTANCE = new GlobalWindow();
+
+    private GlobalWindow() { }
+    //对外提供 get() 方法返回 GlobalWindow 实例，并且是个全局单例
+    public static GlobalWindow get() {
+        return INSTANCE;
+    }
+}
+```
