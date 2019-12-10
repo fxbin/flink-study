@@ -265,3 +265,294 @@ public class GlobalWindow extends Window {
     }
 }
 ```
+
+### Window 组件之 WindowAssigner 使用及源码分析
+
+> 到达窗口操作符的元素被传递给 WindowAssigner。WindowAssigner 将元素分配给一个或多个窗口，可能会创建新的窗口。
+
+> 窗口本身只是元素列表的标识符，它可能提供一些可选的元信息，例如 TimeWindow 中的开始和结束时间。注意，元素可以被添加到多个窗口，这也意味着一个元素可以同时在多个窗口存在。
+
+> WindowAssigner 的代码定义：
+```java
+public abstract class WindowAssigner<T, W extends Window> implements Serializable {
+    //分配数据到窗口并返回窗口集合
+    public abstract Collection<W> assignWindows(T element, long timestamp, WindowAssignerContext context);
+}
+```
+
+> WindowAssigner抽象类有如下实现类：
+
+![img WindowAssigner抽象类的实现类](image/WindowAssigner%20实现类.png)
+
+> WindowAssigner 实现类的作用介绍
+
+| Assigner | 说明 |
+| - | - |
+| GlobalWindows | 所有数据都分配到同一个窗口(GlobalWindow) |
+| TumblingProcessingTimeWindows | 基于处理时间的滚动窗口分配处理 |
+| TumblingEventTimeWindows | 基于事件时间的滚动窗口分配处理 |
+| SlidingEventTimeWindows | 基于事件时间的滑动窗口分配处理 |
+| SlidingProcessingTimeWindows | 基于处理时间的滑动窗口分配处理 |
+| MergingWindowAssigner | 一个抽象类，提供merge 窗口的方法 |
+| EventTimeSessionWindows | 基于事件时间可Merge的会话窗口分配处理 |
+| ProcessingTimeSessionWindows | 基于处理时间可Merge的会话窗口分配处理 |
+
+> 实现规律：
+* 1、定义好实现类的属性
+* 2、根据定义的属性添加构造方法
+* 3、重写 WindowAssigner 中的 assignWindows 等方法
+* 4、定义其他的方法供外部调用
+
+> TumblingEventTimeWindows 源码：
+
+```java
+public class TumblingEventTimeWindows extends WindowAssigner<Object, TimeWindow> {
+    //定义属性
+    private final long size;
+    private final long offset;
+
+    //构造方法
+    protected TumblingEventTimeWindows(long size, long offset) {
+        if (Math.abs(offset) >= size) {
+            throw new IllegalArgumentException("TumblingEventTimeWindows parameters must satisfy abs(offset) < size");
+        }
+        this.size = size;
+        this.offset = offset;
+    }
+
+    //重写 WindowAssigner 抽象类中的抽象方法 assignWindows
+    @Override
+    public Collection<TimeWindow> assignWindows(Object element, long timestamp, WindowAssignerContext context) {
+        //实现该 TumblingEventTimeWindows 中的具体逻辑
+    }
+
+    //其他方法，对外提供静态方法，供其他类调用
+}
+```
+
+### Window 组件之 Trigger 使用及源码分析
+
+> Trigger 表示触发器，每个窗口都拥有一个 Trigger（触发器），该 Trigger 决定何时计算和清除窗口。当先前注册的计时器超时时，将为插入窗口的每个元素调用触发器。在每个事件上，触发器都可以决定触发，即清除（删除窗口并丢弃其内容），或者启动并清除窗口。一个窗口可以被求值多次，并且在被清除之前一直存在。注意，在清除窗口之前，窗口将一直消耗内存。
+
+> Trigger 源码
+
+```java
+public abstract class Trigger<T, W extends Window> implements Serializable {
+    //当有数据进入到 Window 运算符就会触发该方法
+    public abstract TriggerResult onElement(T element, long timestamp, W window, TriggerContext ctx) throws Exception;
+    //当使用触发器上下文设置的处理时间计时器触发时调用
+    public abstract TriggerResult onProcessingTime(long time, W window, TriggerContext ctx) throws Exception;
+    //当使用触发器上下文设置的事件时间计时器触发时调用该方法
+    public abstract TriggerResult onEventTime(long time, W window, TriggerContext ctx) throws Exception;
+}
+```
+
+> TriggerResult 源码
+
+```java
+public enum TriggerResult {
+
+    //不做任何操作
+    CONTINUE(false, false),
+
+    //处理并移除窗口中的数据
+    FIRE_AND_PURGE(true, true),
+
+    //处理窗口数据，窗口计算后不做清理
+    FIRE(true, false),
+
+    //清除窗口中的所有元素，并且在不计算窗口函数或不发出任何元素的情况下丢弃窗口
+    PURGE(false, true);
+}
+```
+
+> Trigger 抽象类的实现类
+
+![img Trigger 抽象类的实现类](image/Trigger%20抽象类的实现类.png)
+
+> Trigger 实现类的作用介绍
+
+| Trigger | 说明 | 
+| - | - |
+| EventTimeTrigger | 当水印通过窗口末尾时触发的触发器 |
+| ProcessingTimeTrigger | 当系统时间通过窗口末尾时触发的触发器 |
+| DeltaTrigger | 一种基于DeltaFunction和阈值触发的触发器 |
+| CountTrigger | 一旦窗口中的元素数量达到给定数量时就触发的触发器 |
+| PurgingTrigger | 一种触发器，可以将任何触发器转换为清除触发器 |
+| ContinuousProcessingTimeTrigger | 触发器根据给定的时间间隔连续触发，时间间隔依赖于Job所在机器的系统时间 |
+| ContinuousEventTimeTrigger | 触发器根据给定的时间间隔连续触发，时间间隔依赖于水印时间戳 |
+| NeverTrigger | 一个从来不触发的触发器，作为GlobalWindow的默认触发器 |
+
+> 实现规律：
+
+* 1、定义好实现类的属性
+
+* 2、根据定义的属性添加构造方法
+
+* 3、重写 Trigger 中的 onElement、onEventTime、onProcessingTime 等方法
+
+* 4、定义其他的方法供外部调用
+
+> CountTrigger 源码
+
+```java
+public class CountTrigger<W extends Window> extends Trigger<Object, W> {
+    //定义属性
+    private final long maxCount;
+
+    private final ReducingStateDescriptor<Long> stateDesc = new ReducingStateDescriptor<>("count", new Sum(), LongSerializer.INSTANCE);
+    //构造方法
+    private CountTrigger(long maxCount) {
+        this.maxCount = maxCount;
+    }
+
+    //重写抽象类 Trigger 中的抽象方法 
+    @Override
+    public TriggerResult onElement(Object element, long timestamp, W window, TriggerContext ctx) throws Exception {
+        //实现 CountTrigger 中的具体逻辑
+    }
+
+    @Override
+    public TriggerResult onEventTime(long time, W window, TriggerContext ctx) {
+        return TriggerResult.CONTINUE;
+    }
+
+    @Override
+    public TriggerResult onProcessingTime(long time, W window, TriggerContext ctx) throws Exception {
+        return TriggerResult.CONTINUE;
+    }
+}
+``` 
+
+### Window 组件之 Evictor 使用及源码分析
+
+> Evictor 表示驱逐者，它可以遍历窗口元素列表，并可以决定从列表的开头删除首先进入窗口的一些元素，然后其余的元素被赋给一个计算函数，如果没有定义 Evictor，触发器直接将所有窗口元素交给计算函数。
+
+> Evictor 的源码
+
+```java
+public interface Evictor<T, W extends Window> extends Serializable {
+    //在窗口函数之前调用该方法选择性地清除元素
+    void evictBefore(Iterable<TimestampedValue<T>> elements, int size, W window, EvictorContext evictorContext);
+    //在窗口函数之后调用该方法选择性地清除元素
+    void evictAfter(Iterable<TimestampedValue<T>> elements, int size, W window, EvictorContext evictorContext);
+}
+```
+
+> Evictor的实现类
+
+![img  Evictor的实现类](image/Evictor的实现类.png)
+
+> Evictor 实现类的作用介绍
+
+| Evictor | 说明 |
+| - | - |
+| TimeEvictor | 元素可以在窗口中存在一段时间，老数据会被清除 |
+| CountEvictor | 窗口中可以保存指定数量的数据，超过则会清除老的数据 |
+| DeltaEvictor | 根据DeltaFunction 的实现和阈值来决定如何清理数据 |
+
+> 实现规律：
+
+* 1、定义好实现类的属性
+
+* 2、根据定义的属性添加构造方法
+
+* 3、重写 Evictor 中的 evictBefore 和 evictAfter 方法
+
+* 4、定义关键的内部实现方法 evict，处理具体的逻辑
+
+* 5、定义其他的方法供外部调用
+
+> CountEvictor 的源码
+
+```java
+public class CountEvictor<W extends Window> implements Evictor<Object, W> {
+    private static final long serialVersionUID = 1L;
+
+    //定义属性
+    private final long maxCount;
+    private final boolean doEvictAfter;
+
+    //构造方法
+    private CountEvictor(long count, boolean doEvictAfter) {
+        this.maxCount = count;
+        this.doEvictAfter = doEvictAfter;
+    }
+    //构造方法
+    private CountEvictor(long count) {
+        this.maxCount = count;
+        this.doEvictAfter = false;
+    }
+
+    //重写 Evictor 中的 evictBefore 方法
+    @Override
+    public void evictBefore(Iterable<TimestampedValue<Object>> elements, int size, W window, EvictorContext ctx) {
+        if (!doEvictAfter) {
+            //调用内部的关键实现方法 evict
+            evict(elements, size, ctx);
+        }
+    }
+
+    //重写 Evictor 中的 evictAfter 方法
+    @Override
+    public void evictAfter(Iterable<TimestampedValue<Object>> elements, int size, W window, EvictorContext ctx) {
+        if (doEvictAfter) {
+            //调用内部的关键实现方法 evict
+            evict(elements, size, ctx);
+        }
+    }
+
+    private void evict(Iterable<TimestampedValue<Object>> elements, int size, EvictorContext ctx) {
+        //内部的关键实现方法
+    }
+
+    //其他的方法
+}
+```
+
+> Flink 自带的 Window（Time Window、Count Window、Session Window）, 最后都会调用 Window 方法，源码如下： 
+
+```java
+//提供自定义 Window
+public <W extends Window> WindowedStream<T, KEY, W> window(WindowAssigner<? super T, W> assigner) {
+    return new WindowedStream<>(this, assigner);
+}
+
+//构造一个 WindowedStream 实例
+public WindowedStream(KeyedStream<T, K> input,
+        WindowAssigner<? super T, W> windowAssigner) {
+    this.input = input;
+    this.windowAssigner = windowAssigner;
+    //获取一个默认的 Trigger
+    this.trigger = windowAssigner.getDefaultTrigger(input.getExecutionEnvironment());
+}
+```
+
+>  Window 方法传入的参数是一个 WindowAssigner 对象, （可以利用Flink 现有的 WindowAssigner, 也可以自定义自己的WindowAssigner）, 然后再通过构造一个 WindowedStream 实例（在构造实例的会传入 WindowAssigner 和获取默认的 Trigger）来创建一个 Window。
+
+> 滑动计数窗口，在调用 window 方法之后，还调用了 WindowedStream 的 evictor 和 trigger 方法，trigger 方法会覆盖掉你之前调用 Window 方法中默认的 trigger，如下：
+
+```java
+//滑动计数窗口
+public WindowedStream<T, KEY, GlobalWindow> countWindow(long size, long slide) {
+    return window(GlobalWindows.create()).evictor(CountEvictor.of(size)).trigger(CountTrigger.of(slide));
+}
+
+//trigger 方法
+public WindowedStream<T, K, W> trigger(Trigger<? super T, ? super W> trigger) {
+    if (windowAssigner instanceof MergingWindowAssigner && !trigger.canMerge()) {
+        throw new UnsupportedOperationException("A merging window assigner cannot be used with a trigger that does not support merging.");
+    }
+
+    if (windowAssigner instanceof BaseAlignedWindowAssigner) {
+        throw new UnsupportedOperationException("Cannot use a " + windowAssigner.getClass().getSimpleName() + " with a custom trigger.");
+    }
+    //覆盖之前的 trigger
+    this.trigger = trigger;
+    return this;
+}
+```
+
+> Evictor 是可选的，但是 WindowAssigner 和 Trigger 是必须会有的，这种创建 Window 的方法充分利用了 KeyedStream 和 WindowedStream 的 API，再加上现有的 WindowAssigner、Trigger、Evictor, 就可以创建Window
+
+
