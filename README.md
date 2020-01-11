@@ -1860,4 +1860,10 @@ Flink 在拿到数据后做一系列的计算后，最后要将计算的结果�
 
 ![img flink Connector Kafka 流程](image/Flink&Kafka流程.png)
 
+## 自定义 Connectors(Source && Sink)
+
+继承 `org.apache.flink.streaming.api.functions.sink.SinkFunction` 
+||
+继承 `org.apache.flink.streaming.api.functions.source.SourceFunction`
+
 
