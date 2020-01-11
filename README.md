@@ -1855,3 +1855,9 @@ Flink 在拿到数据后做一系列的计算后，最后要将计算的结果�
 ![img 常用DataSink.png](image/常用DataSink.png)
 
 可以看到有 Kafka、ElasticSearch、Socket、RabbitMQ、JDBC、Cassandra POJO、File、Print 等 Sink 的方式
+
+## Flink Connector Kafka 使用和剖析
+
+![img flink Connector Kafka 流程](image/Flink&Kafka流程.png)
+
+

@@ -30,6 +30,7 @@ public class WikipediaAnalysis {
 
         KeyedStream<WikipediaEditEvent, String> keyedEdits = edits
                 .keyBy(new KeySelector<WikipediaEditEvent, String>() {
+                    @Override
                     public String getKey(WikipediaEditEvent event) throws Exception {
                         return event.getUser();
                     }
@@ -38,22 +39,26 @@ public class WikipediaAnalysis {
         SingleOutputStreamOperator<Tuple2<String, Long>> result = keyedEdits
                 .timeWindow(Time.seconds(1))
                 .aggregate(new AggregateFunction<WikipediaEditEvent, Tuple2<String, Long>, Tuple2<String, Long>>() {
+                    @Override
                     public Tuple2<String, Long> createAccumulator() {
                         return new Tuple2<String, Long>("", 0L);
                     }
 
+                    @Override
                     public Tuple2<String, Long> add(WikipediaEditEvent value, Tuple2<String, Long> accumulator) {
                         accumulator.f0 = value.getUser();
                         accumulator.f1 += value.getByteDiff();
                         return accumulator;
                     }
 
+                    @Override
                     public Tuple2<String, Long> getResult(Tuple2<String, Long> accumulator) {
                         return accumulator;
                     }
 
+                    @Override
                     public Tuple2<String, Long> merge(Tuple2<String, Long> a, Tuple2<String, Long> b) {
-                        return new Tuple2<String, Long>(a.f0, a.f1 + b.f1);
+                        return new Tuple2<>(a.f0, a.f1 + b.f1);
                     }
                 });
 
