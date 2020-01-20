@@ -16,6 +16,7 @@
         <module>customize-connectors</module>
         <module>connectors-kafka</module>
         <module>connectors-elasticsearch</module>
+        <module>connectors-redis</module>
     </modules>
 
 
