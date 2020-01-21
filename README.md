@@ -1856,7 +1856,7 @@ Flink 在拿到数据后做一系列的计算后，最后要将计算的结果�
 
 可以看到有 Kafka、ElasticSearch、Socket、RabbitMQ、JDBC、Cassandra POJO、File、Print 等 Sink 的方式
 
-## Flink Connector Kafka 使用和剖析
+## Flink Connectors Kafka 使用和剖析
 
 ![img flink Connector Kafka 流程](image/Flink&Kafka流程.png)
 
@@ -1866,4 +1866,20 @@ Flink 在拿到数据后做一系列的计算后，最后要将计算的结果�
 ||
 继承 `org.apache.flink.streaming.api.functions.source.SourceFunction`
 
+## Flink Connectors ElasticSearch
 
+## Flink Connectors HBase
+
+HBase 常用命令
+HBase 中常用的命令有：list（列出已存在的表）、create（创建表）、put（写数据）、get（读数据）、scan（读数据，读全表）、describe（显示表详情）
+
+| 命令 | 描述 | 范例 |
+| - | - | - |
+| list | 显示存在的表 | list |
+| create | 创建表 | create 'fxbin','info' |
+| put | 写数据 | put 'fxbin','first','info:bar','hello' |
+| get | 读数据 | get 'fxbin','first' |
+| scan | 读数据(全表) | scan 'fxbin' |
+| describe | 显示表详情 | describe 'fxbin' |
+
+## Flink Connectors Redis
