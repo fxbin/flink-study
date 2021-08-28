@@ -26,7 +26,7 @@ public class MysqlUtils {
         Connection con = null;
         try {
             Class.forName("com.mysql.cj.jdbc.Driver");
-            con = DriverManager.getConnection("jdbc:mysql://20.20.0.36:3306/auth_center?zeroDateTimeBehavior=convertToNull&useUnicode=true&characterEncoding=UTF-8&zeroDateTimeBehavior=round&serverTimezone=Asia/Shanghai&&allowMultiQueries=true", "root", "Zichan360!");
+            con = DriverManager.getConnection("jdbc:mysql://20.20.0.36:3306/auth_center?zeroDateTimeBehavior=convertToNull&useUnicode=true&characterEncoding=UTF-8&zeroDateTimeBehavior=round&serverTimezone=Asia/Shanghai&&allowMultiQueries=true", "root", "root");
         } catch (Exception e) {
             System.out.println("mysql get connection has exception , msg = " + e.getMessage());
         }
